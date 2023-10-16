@@ -1,0 +1,8 @@
+23:36:17 [App     ] Build date: Jul 10 2023, 23:34:28
+23:36:17 [App     ] CPU: AMD Ryzen 7 7700 8-Core Processor               (16 cores)
+23:36:17 [App     ] RAM: 61.95GB Physical Memory 2.00GB Virtual Memory
+23:36:17 [App     ] OS: Linux 5.19.0-45-generic (x86_64)
+23:36:17 [App     ] Disk: 570.70GB (671.79GB) space
+23:36:17 [App     ] SSE & AVX compatible CPU & OS detected
+23:36:17 [App     ] Command line: DensifyPointCloud -i ../../test_data/scan/scene.mvs -o ../../test_data/scan/densify.mvs -w ../../test_data/scan/ --geometric-iters 0 --resolution-level 5 --postprocess-dmaps 0
+23:36:17 [App     ] CUDA device 0 initialized: NVIDIA GeForce RTX 2080 Ti (compute capability 7.5; memory 10.75GB)

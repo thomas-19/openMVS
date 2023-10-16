@@ -242,6 +242,7 @@ bool DepthData::Save(const String& fileName) const
 		for (const ViewData& image: images)
 			IDs.push_back(image.GetID());
 		const ViewData& image0 = GetView();
+		//COFFEE the IDs dismiss the depthmap size
 		if (!ExportDepthDataRaw(fileNameTmp, image0.pImageData->name, IDs, depthMap.size(), image0.camera.K, image0.camera.R, image0.camera.C, dMin, dMax, depthMap, normalMap, confMap, viewsMap))
 			return false;
 	}
@@ -261,6 +262,12 @@ bool DepthData::Load(const String& fileName, unsigned flags)
 	Camera camera;
 	if (!ImportDepthDataRaw(fileName, imageFileName, IDs, imageSize, camera.K, camera.R, camera.C, dMin, dMax, depthMap, normalMap, confMap, viewsMap, flags))
 		return false;
+	//TODO debug
+	std::cout << "DepthData::Load: " << fileName << std::endl;
+	std::cout << "IDs.size() = " << IDs.size() << std::endl;
+	std::cout << "image.size() = " << images.size() << std::endl;
+	std::cout << "IDs.front() = " << IDs.front() << std::endl;
+	std::cout << "GetView().GetID() = " << GetView().GetID() << std::endl;
 	ASSERT(!IsValid() || (IDs.size() == images.size() && IDs.front() == GetView().GetID()));
 	ASSERT(depthMap.size() == imageSize);
 	return true;
@@ -2106,9 +2113,132 @@ bool MVS::ImportDepthDataRaw(const String& fileName, String& imageFileName,
 	return bRet;
 } // ImportDepthDataRaw
 /*----------------------------------------------------------------*/
+//NEEDTEST
+bool MVS::ResizeDepthDataRaw(const String& fileName,const cv::Size& size){
+	//DEBUG NOTICE
+	std::cout<<"ResizeDepthDataRaw: start"<<std::endl;
+	FILE* f = fopen(fileName, "rb");
+	if (f == NULL) {
+		DEBUG("error: opening file '%s' for reading depth-data", fileName.c_str());
+		return false;
+	}
+	// read header
+	HeaderDepthDataRaw header;
+	if (fread(&header, sizeof(HeaderDepthDataRaw), 1, f) != 1 ||
+		header.name != HeaderDepthDataRaw::HeaderDepthDataRawName() ||
+		(header.type & HeaderDepthDataRaw::HAS_DEPTH) == 0 ||
+		header.depthWidth <= 0 || header.depthHeight <= 0 ||
+		header.imageWidth < header.depthWidth || header.imageHeight < header.depthHeight)
+	{
+		DEBUG("error: invalid depth-data file '%s'", fileName.c_str());
+		return false;
+	}
+	// check size
+	cv::Size depth_size = cv::Size(header.depthWidth, header.depthHeight);
+	//TODO DEBUG
+	std::cout<<"depth_size:"<<depth_size<<std::endl;
+	std::cout<<"size:"<<size<<std::endl;
+	if(depth_size == size){
+		fclose(f);
+		return true;
+	}
+	// read image file name
+	String imageFileName;
+	STATIC_ASSERT(sizeof(String::value_type) == sizeof(char));
+	uint16_t nFileNameSize;
+	fread(&nFileNameSize, sizeof(uint16_t), 1, f);
+	imageFileName.resize(nFileNameSize);
+	fread(imageFileName.data(), sizeof(char), nFileNameSize, f);
+	// read neighbor IDs
+	IIndexArr IDs;
+	STATIC_ASSERT(sizeof(uint32_t) == sizeof(IIndex));
+	uint32_t nIDs;
+	fread(&nIDs, sizeof(IIndex), 1, f);
+	ASSERT(nIDs > 0 && nIDs < 256);
+	IDs.resize(nIDs);
+	fread(IDs.data(), sizeof(IIndex), nIDs, f);
+	// read pose
+	KMatrix K;
+	RMatrix R;
+	CMatrix C;
+	STATIC_ASSERT(sizeof(double) == sizeof(REAL));
+	fread(K.val, sizeof(REAL), 9, f);
+	fread(R.val, sizeof(REAL), 9, f);
+	fread(C.ptr(), sizeof(REAL), 3, f);
+	// read depth-map
+	Depth dMin;
+	Depth dMax;
+	DepthMap depthMap;
+	dMin = header.dMin;
+	dMax = header.dMax;
+	cv::Size imageSize;
+	imageSize.width = header.imageWidth;
+	imageSize.height = header.imageHeight;
+	if ((HeaderDepthDataRaw::HAS_DEPTH) != 0) {
+		depthMap.create(header.depthHeight, header.depthWidth);
+		fread(depthMap.getData(), sizeof(float), depthMap.area(), f);
+		cv::resize(depthMap, depthMap, size, 0, 0, cv::INTER_NEAREST);
+	} else {
+		fseek(f, sizeof(float)*header.depthWidth*header.depthHeight, SEEK_CUR);
+	}
+	// read normal-map
+	NormalMap normalMap;
+	if ((header.type & HeaderDepthDataRaw::HAS_NORMAL) != 0) {
+		if ((HeaderDepthDataRaw::HAS_NORMAL) != 0) {
+			normalMap.create(header.depthHeight, header.depthWidth);
+			fread(normalMap.getData(), sizeof(float)*3, normalMap.area(), f);
+			cv::resize(normalMap, normalMap, size, 0, 0, cv::INTER_NEAREST);
+		} else {
+			fseek(f, sizeof(float)*3*header.depthWidth*header.depthHeight, SEEK_CUR);
+		}
+	}
+	// read confidence-map
+	ConfidenceMap confMap;
+	if ((header.type & HeaderDepthDataRaw::HAS_CONF) != 0) {
+		if ((HeaderDepthDataRaw::HAS_CONF) != 0) {
+			confMap.create(header.depthHeight, header.depthWidth);
+			fread(confMap.getData(), sizeof(float), confMap.area(), f);
+			cv::resize(confMap, confMap, size, 0, 0, cv::INTER_NEAREST);
+		} else {
+			fseek(f, sizeof(float)*header.depthWidth*header.depthHeight, SEEK_CUR);
+		}
+	}
+	// read visibility-map
+	ViewsMap viewsMap;
+	if ((header.type & HeaderDepthDataRaw::HAS_VIEWS) != 0) {
+		if ((HeaderDepthDataRaw::HAS_VIEWS) != 0) {
+			viewsMap.create(header.depthHeight, header.depthWidth);
+			fread(viewsMap.getData(), sizeof(uint8_t)*4, viewsMap.area(), f);
+			cv::resize(viewsMap, viewsMap, size, 0, 0, cv::INTER_NEAREST);
+		}
+	}
+	fclose(f);
+	// export resized depth data 
+	std::cout<<"ExportDepthDataRaw: start"<<std::endl;
+	std::cout<<"ExportDepthDataRaw: fileName:"<<fileName<<std::endl;
+	std::cout<<"ExportDepthDataRaw: imageFileName:"<<imageFileName<<std::endl;
+	std::cout<<"imageSize:"<<imageSize<<std::endl;
+	std::cout<<"IDs.size():"<<IDs.size()<<std::endl;
+	std::cout<<"K:"<<K<<std::endl;
+	std::cout<<"R:"<<R<<std::endl;
+	std::cout<<"C:"<<C<<std::endl;
+	std::cout<<"dMin:"<<dMin<<std::endl;
+	std::cout<<"dMax:"<<dMax<<std::endl;
+	std::cout<<"depthMap.size:"<<depthMap.size()<<std::endl;
+	std::cout<<"normalMap.size:"<<normalMap.size()<<std::endl;
+	std::cout<<"confMap.size:"<<confMap.size()<<std::endl;
+	std::cout<<"viewsMap.size:"<<viewsMap.size()<<std::endl;
+
+	
+	if(ExportDepthDataRaw(fileName, imageFileName,IDs, size,K, R, C,dMin, dMax,depthMap, normalMap, confMap, viewsMap))
+		return true;
+	else
+		return false;
+}
+
 
 bool MVS::GetDepthMapHeaderSize(const String& fileName, cv::Size& size)
-{
+{	
 	FILE* f = fopen(fileName, "rb");
 	if (f == NULL) {
 		DEBUG("error: opening file '%s' for reading depth-data", fileName.c_str());

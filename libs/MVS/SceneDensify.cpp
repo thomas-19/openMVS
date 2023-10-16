@@ -1965,12 +1965,20 @@ void Scene::DenseReconstructionEstimate(void* pData)
 			if (depthmapComputed && data.nFusionMode >= 0) {
 				const std::string depthMapName(ComposeDepthFilePath(data.scene.images[idx].ID, "dmap"));
 				cv::Size depthMapSize;
-				if (GetDepthMapHeaderSize(depthMapName, depthMapSize) && depthMapSize != data.scene.images[idx].GetSize()) {
-					depthData.Load(depthMapName);
-					DepthMap& depthMap = depthData.depthMap;
-					cv::resize(depthMap, depthMap, data.scene.images[idx].GetSize(), 0, 0, cv::INTER_NEAREST);
-					depthData.Save(depthMapName);
-				}
+				
+				//if (GetDepthMapHeaderSize(depthMapName, depthMapSize) && depthMapSize != data.scene.images[idx].GetSize()) {
+				//	depthData.Load(depthMapName);
+				//	DepthMap& depthMap = depthData.depthMap;
+				//	cv::resize(depthMap, depthMap, data.scene.images[idx].GetSize(), 0, 0, cv::INTER_NEAREST);
+				//	depthData.Save(depthMapName);
+				//}
+				
+				ResizeDepthDataRaw(depthMapName, data.scene.images[idx].GetSize());
+				
+				
+				
+				
+				
 				if (OPTDENSE::nOptimize & OPTDENSE::OPTIMIZE) {
 					if (!depthData.Load(depthMapName)) {
 						VERBOSE("error: invalid depth-map '%s'", depthMapName.c_str());

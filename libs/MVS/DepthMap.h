@@ -521,6 +521,9 @@ MVS_API bool ImportDepthDataRaw(const String&, String& imageFileName,
 
 MVS_API bool GetDepthMapHeaderSize(const String& fileName, cv::Size& size);
 
+MVS_API bool ResizeDepthDataRaw(const String& fileName, const cv::Size& size);
+
+
 MVS_API void CompareDepthMaps(const DepthMap& depthMap, const DepthMap& depthMapGT, uint32_t idxImage, float threshold=0.01f);
 MVS_API void CompareNormalMaps(const NormalMap& normalMap, const NormalMap& normalMapGT, uint32_t idxImage);
 /*----------------------------------------------------------------*/
